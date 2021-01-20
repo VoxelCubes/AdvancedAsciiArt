@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Advanced Ascii art generator for any font.
 
@@ -8,10 +9,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageChops, ImageStat
 from math import floor
 from scipy import fftpack
 import numpy as np
-import sys
+import os
 
-ASCII_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~ "
-ASCII_CHARS_DISABLE = "#$%*+@[\\]^_`{|}~ "
+ASCII_CHARS = "⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿"#"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~"
+ASCII_CHARS_DISABLE = ""##$%*+@[\\]^_`{|}~"
 for char in ASCII_CHARS_DISABLE:
     ASCII_CHARS = ASCII_CHARS.replace(char, "")
 
@@ -117,7 +118,9 @@ def font_thumbnails(font, characters, max_size, width=None, height=None, is_padd
         char_image = Image.new('L', (final_width, final_height), "white")
         char_image.paste(image, (floor((final_width - char_w) / 2), floor((final_height - char_h) / 2)))
         final_thumbs.append(char_image)
+        char_image.show()
 
+    print("Chunk size: ", final_width, final_height)
     return final_thumbs
 
 
@@ -176,22 +179,33 @@ def asciify_image_map(image, chunks):
 
     def compare_dct():
         cutout_dct = dct2(temp_cutout)
-        diff_ratio = np.mean(np.abs(cutout_dct - fingerprint))
+        diff_ratio = np.mean(np.abs((cutout_dct - fingerprint)**2))
         chunk_match.append(diff_ratio)
+        return 0
+
     print("\tMatching...")
     last_percent = -10
     for cy in range(0, chunks_y):
+
         percent = round((cy / chunks_y) * 100)
         if percent - last_percent >= 10:
             last_percent = percent
             print(f"\t\t{percent}%")
+
         for cx in range(0, chunks_x):
             temp_cutout = image.crop((chunk_width * cx, chunk_height * cy, chunk_width * (cx + 1), chunk_height * (cy + 1)))
             chunk_match = []
 
+            if ALLOW_WHITE:
+                pixels = np.array(temp_cutout)
+                if pixels.mean() > WHITE_THRESHOLD:
+                    index_map[cy][cx] = -1
+                    continue
+
             if DCT:
                 for fingerprint in fingerprints:
                     compare_dct()
+
             else:
                 for chunk in chunks:
                     compare_diff()
@@ -217,31 +231,36 @@ def assemble_from_chunks(chunks, chunk_map):
     cols = len(chunk_map[0])
     chunk_width, chunk_height = chunks[0].size
     canvas = Image.new("L", (cols * chunk_width, rows * chunk_height), "white")
+    print("Final image dimensions", cols * chunk_width, rows * chunk_height)
 
     for cy in range(0, rows):
         for cx in range(0, cols):
-            len(chunks)
-            chunk = chunks[chunk_map[cy][cx]]
-            canvas.paste(chunk, (chunk_width * cx, chunk_height * cy))
+            if chunk_map[cy][cx] > 0:
+                chunk = chunks[chunk_map[cy][cx]]
+                canvas.paste(chunk, (chunk_width * cx, chunk_height * cy))
 
     canvas.show()
     return canvas
 
 DCT = True
 DCT_CUTOFF = 3  # higher retains more detail
-width = 30
-height = 30
-font = ImageFont.truetype("\\..\\fonts\\Tensura.ttf", 20)
+ALLOW_WHITE = True
+WHITE_THRESHOLD = 240
+width = None
+height = None
+file_name = "test.png"#"vol12\\LabyrinthENtyped.png"
+font = ImageFont.truetype("c:\windows\\fonts\\ARIALUNI.TTF", 15)#Tensura\\..\\fonts\\BebasNeue-Regular.ttf"
 print("Generating character thumbnails...")
-thumbs = font_thumbnails(font, ASCII_CHARS, 100, width=None, height=None, square=False)
+thumbs = font_thumbnails(font, ASCII_CHARS, 50, width=width, height=height, square=False)
 print("Loading image...")
-original = Image.open("..\\image_in\\cover2.jpg")  # Dialemma.jpg")#
+original = Image.open(".\\image_in\\"+file_name)  # Dialemma.jpg")#
 grayscale = to_greyscale(original)
 print("Matching chunks...")
 chunk_map = asciify_image_map(grayscale, thumbs)
 print("Assembling...")
-assemble_from_chunks(thumbs, chunk_map)
+image = assemble_from_chunks(thumbs, chunk_map)
 
-
+if input("Save image? [y/n]").upper() == "Y":
+    image.save(os.getcwd()+"\\image_out\\"+file_name, "png")
 
 print("done")
