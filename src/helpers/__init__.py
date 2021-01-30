@@ -6,23 +6,19 @@ Helper file for static functions that don't rely on global variables.
 19.01.2021
 """
 
-#ASCII_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~"
-# ASCII_CHARS = "ナフマキビウデントニムイヘゼサベィゾチェヒズヤテシザヂァドグモリォノツボプケネダペロゥジハブオワスバガタョュャアルユパソエギセゴヅホゲメピポヌミラカコヨレク"
 
+from enum import Enum, auto
+from math import floor
 
 import numpy as np
-
 from PIL import Image, ImageDraw, ImageChops
-from math import floor
 from scipy import fftpack
-from enum import Enum, auto
-
-from main import logger
 
 
 class Metric(Enum):
     DCT = auto()
     LUM = auto()
+    MIX = auto()
 
 
 class Confirmation(Enum):
@@ -34,19 +30,19 @@ class Confirmation(Enum):
 def default_config():
     return {
         "general": {
-            "image_path": "vol12\\CarreraUltima.jpg",  # check in image_in, then absolute path
+            "image_path": "cc0_house_tweaked.jpg",  # check in image_in, then absolute path
             "prompt_confirmation": "first",  # first, each, none
             "pad_to_original_size": True,
             "pad_centered": True,
-            "logging": "debug",
+            "logging": "info",
             "progress_interval": 25,
             "allowed_file_types": [".bmp", ".png", ".jpg", ".jpeg", ".tiff"],
             "ignore_invalid_types": True,
         },
         "font_settings": {
-            "font_path": "Tensura.ttf",  # check \fonts\ then windows\fonts\ then absolute path
+            "font_path": "courbd.ttf",  # check \fonts\ then windows\fonts\ then absolute path
             "ASCII_whitelist": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~",
-            "ASCII_blacklist": "#$%*+@[\\]^_`{|}~",
+            "ASCII_blacklist": "",
             "font_size": 20,
             "auto_size": True,
             "character_width": 2,
@@ -55,11 +51,12 @@ def default_config():
             "force_square": False,
         },
         "method": {
-            "metric": "dct",
-            "white_threshold": 254,
-            "normalize_luminosity": False,
+            "metric": "mix",
+            "white_threshold": 250,
+            "normalize_luminosity": True,
             "DCT_cutoff_low": 3,
             "DCT_cutoff_high": 2,
+            "Mix_threshold": 0.50,
         },
     }
 
@@ -67,8 +64,8 @@ def default_config():
 def test_file_extension(file_name, valid_extensions):
     """
     Test if file has extension in config
-    :param file_name: pathlib2 Path
-    :param valid_extensions: list of valid extension strings
+    :param file_name: pathlib2.Path
+    :param valid_extensions: [string,...], list of valid extension strings
     :return True if valid extension
     """
     return file_name.suffix in valid_extensions
@@ -79,8 +76,8 @@ def dct2(image, cutoff_low, cutoff_high):
     Performs a discrete cosine transform on the given image data,
     then truncates results to the first/last n factors.
     :param image: pil image
-    :param cutoff_low: int how many low frequencies to preserve
-    :param cutoff_high: int how many high frequencies to preserve
+    :param cutoff_low: int, how many low frequencies to preserve
+    :param cutoff_high: int, how many high frequencies to preserve
     :return: reduced numpy 2D array
     """
     pixels = np.array(image, dtype=np.float)
@@ -145,35 +142,39 @@ def char_cutout(font, character, max_size):
     Draws a character and crops to bounding box
     :param font: pil font
     :param character: string
-    :param max_size: int
+    :param max_size: (int, int), the size of the canvas to draw on before cropping
     :return: pil image
     """
-    canvas = Image.new('L', (max_size, max_size), "white")
+    canvas = Image.new("L", (max_size, max_size), "white")
     img_draw = ImageDraw.Draw(canvas)
     img_draw.text((0, 0), character, fill="black", font=font)
     return crop_background(canvas)
 
 
-def font_thumbnails(font, characters, max_size, width=None, height=None, is_padding=False, square=False):
+def font_thumbnails(font, characters, max_size, width=None, height=None,
+                    is_padding=False, square=False, logger=None):
     """
     Create a list of character cutouts, optionally padding or cropping if dimensions are given.
     :param font: pil font, contains font size
     :param characters: string of character for each to create cutout
-    :param max_size: largest size to allow when drawing characters
-    :param width: target width. None to fit to largest character
-    :param height: target height. None to fit to largest character
+    :param max_size: (int, int), largest size to allow when drawing characters
+    :param width: int, target width. None to fit to largest character
+    :param height: int, target height. None to fit to largest character
     :param is_padding: when True, width and height are added to the max_char dimensions
     :param square: make image square
-    :return: (list of pil images, final width, final height)
+    :param logger: logger to write to
+    :return: list of pil images
     """
     thumbs = []
     final_thumbs = []
     max_char_width = 0
     max_char_height = 0
 
+    # Create list of images where each character is cropped to its own minimum size
     for char in characters:
         char_image = char_cutout(font, char, max_size)
         c_width, c_height = char_image.size
+        # Find the largest character dimensions to determine auto size
         max_char_width = max(max_char_width, c_width)
         max_char_height = max(max_char_height, c_height)
         thumbs.append(char_image)
@@ -199,7 +200,7 @@ def font_thumbnails(font, characters, max_size, width=None, height=None, is_padd
     # Crop or pad images
     for image in thumbs:
         char_w, char_h = image.size
-        char_image = Image.new('L', (final_width, final_height), "white")
+        char_image = Image.new("L", (final_width, final_height), "white")
         char_image.paste(image, (floor((final_width - char_w) / 2), floor((final_height - char_h) / 2)))
         final_thumbs.append(char_image)
 
@@ -207,11 +208,12 @@ def font_thumbnails(font, characters, max_size, width=None, height=None, is_padd
     return final_thumbs
 
 
-def assemble_from_chunks(chunks, chunk_map):
+def assemble_from_chunks(chunks, chunk_map, logger):
     """
     Assembles ascii tiles according to the 2d map holding the corresponding indices for chunks
     :param chunks: list of pil images
-    :param chunk_map: 2d list of indices referring to chunks
+    :param chunk_map: list[list], 2d list array of indices referring to chunks
+    :param logger: logger to write to
     :return: the ascii art pil image
     """
     rows = len(chunk_map)

@@ -5,24 +5,23 @@ Main file to run.
 19.01.2021
 """
 
-import os
-import sys
 import json
 import logging
+import os
+import sys
 import time
+from math import floor
+
 import logzero
 import numpy as np
-
+from PIL import Image, ImageFont
 from pathlib2 import Path
-from PIL import Image, ImageDraw, ImageFont, ImageChops
-from math import floor
-from scipy import fftpack
 
 # Enums
 from helpers import Metric, Confirmation
 # Functions
 from helpers import default_config, test_file_extension, dct2, assemble_from_chunks, \
-                    luminosity_avg, font_thumbnails, to_greyscale, pad_image_to_size
+    luminosity_avg, font_thumbnails, to_greyscale, pad_image_to_size
 
 
 def add_new_image_from_file(path):
@@ -30,7 +29,7 @@ def add_new_image_from_file(path):
     Try to add the image after testing if the extension is valid.
     :param path: absolute path
     """
-    if test_file_extension(path):
+    if test_file_extension(path, cfg_extensions):
         originals.append(Image.open(str(path)))
         filenames.append(path.name)
     elif cfg_ignore_inv_ext:
@@ -43,9 +42,11 @@ def add_new_image_from_file(path):
 def set_log_level(level):
     """
     Adapting the log level for information display through process.
-    :param level: str - [debug/info/warning/error]
+    :param level: str, [debug/info/warning/error]
     """
+    # Ensuring the global logger is overwritten
     global logger
+
     level_table = {
         'debug': logging.DEBUG,
         'warn': logging.WARNING,
@@ -68,7 +69,7 @@ def asciify_image_map(image, chunks):
     Compares tiles from source image to find best replacement with ascii tiles.
     :param image: pil image
     :param chunks: list of pil images
-    :return: 2d list of indices referring to chunks
+    :return: list[list], 2d list of indices referring to chunks
     """
     image_w, image_h = image.size
     chunk_width, chunk_height = chunks[0].size
@@ -77,43 +78,54 @@ def asciify_image_map(image, chunks):
 
     logger.debug(f"Handling {chunks_x * chunks_y} chunks.")
 
-    temp_cutout = None
+    # Initialize list with independent nested lists
     index_map = [[0] * chunks_x for _ in range(chunks_y)]
+    # Cache for pre-computed character cutouts
     fingerprints = []
     luminosity = []
 
-    if cfg_metric == Metric.DCT:
+    if cfg_metric == Metric.DCT or cfg_metric == Metric.MIX:
+        # Pre-compute the transformation of each chunk.
+        # Save it with its index because MIX metric may skip many chunks.
         logger.debug("\tDiscrete Cosine Transformation...")
-        for chunk in chunks:
-            fingerprints.append(dct2(chunk, cfg_dct_cut_low, cfg_dct_cut_high))
+        for i, chunk in enumerate(chunks):
+            fingerprints.append((dct2(chunk, cfg_dct_cut_low, cfg_dct_cut_high), i))
 
-    elif cfg_metric == Metric.LUM:
+    if cfg_metric == Metric.LUM or cfg_metric == Metric.MIX:
+        # Pre-compute the luminance of each chunk.
+        # Save it with its index because MIX metric may skip many chunks.
         logger.debug("\tLuminosity metric...")
-        for chunk in chunks:
-            luminosity.append(luminosity_avg(chunk))
+        for i, chunk in enumerate(chunks):
+            luminosity.append((luminosity_avg(chunk), i))
         # Map range to 0-255
         if cfg_normalize_lum:
+            luminosity, _ = zip(*luminosity)  # Unzip included iterator
             luminosity /= max(luminosity)
             luminosity -= min(luminosity)
             luminosity *= 255 / max(luminosity)
+            luminosity = list(zip(luminosity, range(len(luminosity))))
 
-    def compare_dct():
-        # Calculate average difference between compressed transformations.
-        diff_ratio = np.mean(np.abs(cutout_dct - fingerprint))
-        chunk_match.append(diff_ratio)
+    # Helper functions only used locally
+    def compare_dct(chunk_print):
+        # Calculate average difference between compressed transformations, save with original index
+        diff_ratio = np.mean(np.abs(cutout_dct - chunk_print[0]))
+        chunk_match.append((diff_ratio, chunk_print[1]))
 
-    def compare_lum():
-        # Calculate average difference in luminosity
-        difference = abs(luminance - cutout_lum)
-        chunk_match.append(difference)
+    def compare_lum(chunk_lum):
+        # Calculate average difference in luminosity, save with original index
+        difference = abs(cutout_lum - chunk_lum[0])
+        chunk_match.append((difference, chunk_lum[1]))
 
+    # Initialize progress counter as configured
     if 0 < cfg_progress_interval < 100:
         last_percent = -cfg_progress_interval
     else:
         last_percent = 1000  # Disable progress reports
 
+    # Loop through all image cutouts and find best match from among the character chunks
     for cy in range(0, chunks_y):
 
+        # Display the current progress at defined intervals
         percent = round((cy / chunks_y) * 100)
         if percent - last_percent >= cfg_progress_interval:
             last_percent = percent
@@ -122,25 +134,48 @@ def asciify_image_map(image, chunks):
         for cx in range(0, chunks_x):
             temp_cutout = image.crop(
                 (chunk_width * cx, chunk_height * cy, chunk_width * (cx + 1), chunk_height * (cy + 1)))
+            # Initialize chunk match list
             chunk_match = []
 
-            if cfg_white_thresh < 255:
+            # Set tiles to white if bright enough.
+            # Chunks with index -1 won't be drawn, leaving a blank white box
+            if cfg_white_thresh < 256:
                 pixels = np.array(temp_cutout)
-                if pixels.mean() > cfg_white_thresh:
+                if pixels.mean() >= cfg_white_thresh:
                     index_map[cy][cx] = -1
                     continue
-
+            # DCT metric
             if cfg_metric == Metric.DCT:
                 cutout_dct = dct2(temp_cutout, cfg_dct_cut_low, cfg_dct_cut_high)
                 for fingerprint in fingerprints:
-                    compare_dct()
+                    compare_dct(fingerprint)
+            # LUM metric
             elif cfg_metric == Metric.LUM:
                 cutout_lum = luminosity_avg(temp_cutout)
                 for luminance in luminosity:
-                    compare_lum()
+                    compare_lum(luminance)
+            # MIX metric
+            elif cfg_metric == Metric.MIX:
+                cutout_lum = luminosity_avg(temp_cutout)
+                cutout_dct = dct2(temp_cutout, cfg_dct_cut_low, cfg_dct_cut_high)
+                # Limit the choices of the DCT metric my first selecting rough matches with LUM metric
+                for luminance in luminosity:
+                    compare_lum(luminance)
 
-            best_match = chunk_match.index(min(chunk_match))
-            index_map[cy][cx] = best_match
+                fingerprints_by_priority = [x for (y, x) in sorted(
+                    zip(chunk_match, fingerprints),
+                    key=lambda pair: pair[0])]
+                # Limit to suggested range
+                fingerprints_by_priority = fingerprints_by_priority[0:cfg_mix_threshold]
+                chunk_match = []
+                for fingerprint in fingerprints_by_priority:
+                    compare_dct(fingerprint)
+
+            # Save best matching character chunk, meaning least difference
+            # Use the index bound to the match tuple
+            # Because the index won't match with the current index in MIX metric
+            best_match = min(chunk_match, key=lambda pair: pair[0])
+            index_map[cy][cx] = best_match[1]
 
     if 0 < cfg_progress_interval < 100:
         logger.info(f"\t\t100%")
@@ -150,6 +185,7 @@ def asciify_image_map(image, chunks):
 
 def make_ascii_art(original):
     """
+    Takes raw input image and outputs the final ascii image.
     Using config (cfg_) values from main
     :return: pil image
     """
@@ -158,11 +194,11 @@ def make_ascii_art(original):
     logger.debug("Generating character thumbnails...")
     thumbs = font_thumbnails(font, cfg_ascii_w, cfg_font_size * 2,
                              width=cfg_char_width, height=cfg_char_height,
-                             square=cfg_is_square, is_padding=cfg_is_padding)
+                             square=cfg_is_square, is_padding=cfg_is_padding, logger=logger)
     logger.debug("Matching chunks...")
     chunk_map = asciify_image_map(to_greyscale(original), thumbs)
     logger.debug("Assembling...")
-    image_assembled = assemble_from_chunks(thumbs, chunk_map)
+    image_assembled = assemble_from_chunks(thumbs, chunk_map, logger)
 
     if cfg_pad_img:
         logger.debug(f"Padding image from {image_assembled.size} to {original.size}")
@@ -203,7 +239,7 @@ if __name__ == "__main__":
             logger.error("Could not save config! Using defaults.")
     # End try
 
-    # Load config
+    # Load config as variables to prevent dict key typos
     cfg_img_path = Path(config["general"]["image_path"])
     cfg_raw_prompt_conf = config["general"]["prompt_confirmation"]
     cfg_pad_img = config["general"]["pad_to_original_size"]
@@ -228,6 +264,7 @@ if __name__ == "__main__":
     cfg_normalize_lum = config["method"]["normalize_luminosity"]
     cfg_dct_cut_low = config["method"]["DCT_cutoff_low"]
     cfg_dct_cut_high = config["method"]["DCT_cutoff_high"]
+    cfg_mix_threshold = config["method"]["Mix_threshold"]
 
     # Handle settings
     set_log_level(cfg_log_level)
@@ -236,6 +273,8 @@ if __name__ == "__main__":
         cfg_metric = Metric.DCT
     elif cfg_raw_metric.upper() == "LUM":
         cfg_metric = Metric.LUM
+    elif cfg_raw_metric.upper() == "MIX":
+        cfg_metric = Metric.MIX
     else:
         logger.error("Unrecognized metric selected!")
         sys.exit()
@@ -255,8 +294,16 @@ if __name__ == "__main__":
         cfg_ascii_w = cfg_ascii_w.replace(char, "")
 
     if cfg_auto_size and not cfg_is_padding:
-        cfg_char_width  = None
+        cfg_char_width = None
         cfg_char_height = None
+
+    # Convert mix threshold to absolute value if percentage,
+    # or make sure it's less than the number of allowed characters
+    if cfg_metric == Metric.MIX:
+        if cfg_mix_threshold < 1:
+            cfg_mix_threshold = round(cfg_mix_threshold * len(cfg_ascii_w))
+        cfg_mix_threshold = np.clip(round(cfg_mix_threshold), 1, len(cfg_ascii_w) - 1)
+        logger.debug(f"Set MIX threshold at the best {cfg_mix_threshold} picks.")
 
     """
     --------------------Files--------------------
@@ -316,42 +363,18 @@ if __name__ == "__main__":
     ascii_art = []
 
     for index, image in enumerate(originals):
-        logger.info(f"Image {index+1} / {len(originals)} : {filenames[index]}")
+        logger.info(f"Image {index + 1} / {len(originals)} : {filenames[index]}")
         ascii_art.append(make_ascii_art(image))
-        # Ask if configured to
-        if cfg_prompt_conf == Confirmation.EACH:
+        # May remain undefined, though unlikely.
+        file_path = None
+        # Check if consent is needed
+        get_consent = cfg_prompt_conf == Confirmation.EACH or (index == 0 and cfg_prompt_conf == Confirmation.FIRST)
+
+        if get_consent:
             ascii_art[index].show()
-            if input("Save image? [y/n]").upper() == "Y":
-                try:
-                    file_path = str(cwd) + "\\image_out\\" + filenames[index]
-                    ascii_art[index].save(file_path, "png")
-                    print(f"Saved image in {file_path}")
-                except OSError:
-                    logger.error(f"Could not save image in {file_path}!")
-                    sys.exit()
 
-            if index != len(originals)-1 and input("Continue with next image? [y/n]").upper() == "Y":
-                continue
-            else:
-                break
-
-        elif index == 0 and cfg_prompt_conf == Confirmation.FIRST:
-            ascii_art[index].show()
-            if input("Save image? [y/n]").upper() == "Y":
-                try:
-                    file_path = str(cwd) + "\\image_out\\" + filenames[index]
-                    ascii_art[index].save(file_path, "png")
-                    print(f"Saved image in {file_path}")
-                except OSError:
-                    logger.error(f"Could not save image in {file_path}!")
-                    sys.exit()
-
-            if index != len(originals) - 1 and input("Continue with next images? [y/n]").upper() == "Y":
-                continue
-            else:
-                break
-
-        else:
+        if not get_consent or input("Save image? [y/n]").upper() == "Y":
+            # Attempt to save image
             try:
                 file_path = str(cwd) + "\\image_out\\" + filenames[index]
                 ascii_art[index].save(file_path, "png")
@@ -359,5 +382,11 @@ if __name__ == "__main__":
             except OSError:
                 logger.error(f"Could not save image in {file_path}!")
                 sys.exit()
+
+        if get_consent:
+            if index != len(originals) - 1 and input("Continue with next image? [y/n]").upper() == "Y":
+                continue
+            else:
+                break
 
     logger.info("Done.")
