@@ -41,7 +41,7 @@ character that best fits the shape to preserve fine details.
   * Still slower than lum
 ---
 ### See the difference
-_Note: to improve results, try increase the brightness and/or contrast of your image. 
+_Note: to improve results, try increasing the brightness and/or contrast of your image. 
 You do not need to make them grayscale beforehand._
 
 Original|Slight tweaks
@@ -59,7 +59,7 @@ Traditionally, ASCII art is meant to be printed as plain text, which requires a 
 Exporting straight to an image though, avoids this issue and allows for more possibilities.
 The script will automatically center any character and can adjust the bounding box appropriately,
 meaning any font, including glyphs, are supported, as long as pillow can draw them. 
-Simply supply a path to a .ttf file. _Note: you may need to exclude a number of characters 
+Simply supply a path to a .ttf file. _Note: you may need to exclude a number of characters._
 
 |Glyph font|
 |--------|
@@ -75,7 +75,7 @@ python main.py
 ```
 The current working directory will be set automatically to `\AdvancedAsciiArt\`.
 
-## Requirements
+## Dependencies
 Install with pip:
 ```
 pip install -r requirements.txt
@@ -93,7 +93,7 @@ When run, the script will check for the existence of a `config.json` file.
 Should the file be missing or corrupted, a new file will be generated.
 
 Default values of config.json:
-```JSON
+```json
 {
     "general": {
         "image_path": "cc0_house_tweaked.jpg",
@@ -179,5 +179,5 @@ Default values of config.json:
 * **Mix_threshold** _Affects the mix metric._ Can be a percentage when in the range of ]0, 1[ or 
   an absolute value for values >= 1. This determines how many of the best candidates of the lum metric to present to the dct metric.
 
-##TODO:
+## TODO:
 - [ ] Allow for plain text output (Only works with monospace fonts)
