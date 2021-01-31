@@ -136,7 +136,7 @@ Default values of config.json:
 * **image_path** 
   For a given file or directory name it will test for its existence in `\AdvancedAsciiArt\image_in\`.
   If an absolute path is given, the script will load from there instead. 
-  _Note: the output directory will always be `\AdvancedAsciiArt\image_in\`._ 
+  _Note: the output directory will always be `\AdvancedAsciiArt\image_out\`._ 
 * **prompt_confirmation** Can be set to: `each`, `first`, or `none`.
   Determines whether to ask if you would like to save the current image and, 
   potentially, continue to the next.
