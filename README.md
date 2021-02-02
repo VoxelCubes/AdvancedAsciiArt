@@ -6,7 +6,7 @@ Highly configurable, for single files or entire batches.
 This script offers **three** metrics by which to choose the most optimal character:
 ___
 #### LUM
-The _luminance_ metric evaluates the average brightness of a given part of the image, 
+The _luminance_ metric evaluates the average brightness of a given part of the image
 and finds the best match solely on brightness. This is the conventional method for making ASCII art.  
 **Pros:**
   * Fast
@@ -195,7 +195,7 @@ Default values of config.json:
 
 ## Text Output Calibration
 When pasting art as text into another program, the character and line spacing may change. To correct distortions,
-it is best tweak the scale factors. In order to find the optimal values, you can use the _testbox.png_ image
+it is best to tweak the scale factors. In order to find the optimal values, you can use the _testbox.png_ image
 to find what values preserve its square shape.  
 For Discord, I've found that a width of 1.1 and a height of 0.6 are pretty good.
 
