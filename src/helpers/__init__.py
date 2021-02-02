@@ -31,9 +31,13 @@ def default_config():
     return {
         "general": {
             "image_path": "cc0_house_tweaked.jpg",  # check in image_in, then absolute path
+            "output_as_txt": False,
             "prompt_confirmation": "first",  # first, each, none
             "pad_to_original_size": True,
             "pad_centered": True,
+            "remove_trailing_whitespace": True,
+            "scale_input_width": 1.0,
+            "scale_input_height": 1.0,
             "logging": "info",
             "progress_interval": 25,
             "allowed_file_types": [".bmp", ".png", ".jpg", ".jpeg", ".tiff"],
@@ -43,6 +47,7 @@ def default_config():
             "font_path": "courbd.ttf",  # check \fonts\ then windows\fonts\ then absolute path
             "ASCII_whitelist": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~",
             "ASCII_blacklist": "",
+            "text_out_whitespace": " ",
             "font_size": 20,
             "auto_size": True,
             "character_width": 2,
@@ -228,3 +233,35 @@ def assemble_from_chunks(chunks, chunk_map, logger):
                 canvas.paste(chunk, (chunk_width * cx, chunk_height * cy))
 
     return canvas
+
+
+def assemble_from_chunks_txt(chunk_map, ascii_string, whitespace, remove_whitespace, logger):
+    """
+    Assembles ascii art according to the indices in the chunk_map
+    :param chunk_map: list[list], 2d list array of indices referring to characters
+    :param ascii_string: string of whitelisted characters
+    :param whitespace: the whitespace character to pad with
+    :param remove_whitespace: bool, right trim each line to save characters
+    :param logger: logger to write to
+    :return: string ascii art
+    """
+    rows = len(chunk_map)
+    cols = len(chunk_map[0])
+    out_str = ""
+
+    logger.debug(f"Final image dimensions are {rows} rows with {cols} characters each.")
+    for cy in range(0, rows):
+
+        temp_line = ""
+
+        for cx in range(0, cols):
+            if chunk_map[cy][cx] >= 0:
+                temp_line += ascii_string[chunk_map[cy][cx]]
+            else:
+                temp_line += whitespace
+
+        if remove_whitespace:
+            temp_line = temp_line.rstrip(whitespace)
+        out_str += temp_line + "\n"
+
+    return out_str

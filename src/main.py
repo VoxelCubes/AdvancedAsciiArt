@@ -21,7 +21,7 @@ from pathlib2 import Path
 from helpers import Metric, Confirmation
 # Functions
 from helpers import default_config, test_file_extension, dct2, assemble_from_chunks, \
-    luminosity_avg, font_thumbnails, to_greyscale, pad_image_to_size
+    assemble_from_chunks_txt, luminosity_avg, font_thumbnails, to_greyscale, pad_image_to_size
 
 
 def add_new_image_from_file(path):
@@ -191,23 +191,34 @@ def make_ascii_art(original):
     """
     tic = time.perf_counter()
 
+    width, height = (round(original.width * cfg_pre_scale_width),
+                     round(original.height * cfg_pre_scale_height))
+    img_optimized = to_greyscale(original.resize((width, height)))
+
     logger.debug("Generating character thumbnails...")
     thumbs = font_thumbnails(font, cfg_ascii_w, cfg_font_size * 2,
                              width=cfg_char_width, height=cfg_char_height,
                              square=cfg_is_square, is_padding=cfg_is_padding, logger=logger)
     logger.debug("Matching chunks...")
-    chunk_map = asciify_image_map(to_greyscale(original), thumbs)
+    chunk_map = asciify_image_map(img_optimized, thumbs)
     logger.debug("Assembling...")
+
     image_assembled = assemble_from_chunks(thumbs, chunk_map, logger)
 
-    if cfg_pad_img:
+    if cfg_pad_img and not cfg_txt_output:
         logger.debug(f"Padding image from {image_assembled.size} to {original.size}")
         image_assembled = pad_image_to_size(image_assembled, original.size, cfg_pad_centered)
 
     toc = time.perf_counter()
     logger.info(f"Done in {toc - tic:0.1f} seconds.")
 
-    return image_assembled
+    if cfg_txt_output:
+        image_ascii_str = assemble_from_chunks_txt(
+            chunk_map, cfg_ascii_w, cfg_txt_whitespace, cfg_remove_trailing_ws, logger)
+        logger.info(f"Completed art using {len(image_ascii_str)} characters.")
+        return image_assembled, image_ascii_str
+    else:
+        return image_assembled
 
 
 if __name__ == "__main__":
@@ -240,31 +251,36 @@ if __name__ == "__main__":
     # End try
 
     # Load config as variables to prevent dict key typos
-    cfg_img_path = Path(config["general"]["image_path"])
-    cfg_raw_prompt_conf = config["general"]["prompt_confirmation"]
-    cfg_pad_img = config["general"]["pad_to_original_size"]
-    cfg_pad_centered = config["general"]["pad_centered"]
-    cfg_log_level = config["general"]["logging"]
-    cfg_progress_interval = config["general"]["progress_interval"]
-    cfg_extensions = config["general"]["allowed_file_types"]
-    cfg_ignore_inv_ext = config["general"]["ignore_invalid_types"]
+    cfg_img_path       = Path(config["general"]["image_path"])
+    cfg_txt_output          = config["general"]["output_as_txt"]
+    cfg_raw_prompt_conf     = config["general"]["prompt_confirmation"]
+    cfg_pad_img             = config["general"]["pad_to_original_size"]
+    cfg_pad_centered        = config["general"]["pad_centered"]
+    cfg_remove_trailing_ws  = config["general"]["remove_trailing_whitespace"]
+    cfg_pre_scale_width     = config["general"]["scale_input_width"]
+    cfg_pre_scale_height    = config["general"]["scale_input_height"]
+    cfg_log_level           = config["general"]["logging"]
+    cfg_progress_interval   = config["general"]["progress_interval"]
+    cfg_extensions          = config["general"]["allowed_file_types"]
+    cfg_ignore_inv_ext      = config["general"]["ignore_invalid_types"]
 
-    cfg_font_path = Path(config["font_settings"]["font_path"])
-    cfg_ascii_w = config["font_settings"]["ASCII_whitelist"]
-    cfg_ascii_b = config["font_settings"]["ASCII_blacklist"]
-    cfg_font_size = config["font_settings"]["font_size"]
-    cfg_auto_size = config["font_settings"]["auto_size"]
-    cfg_char_width = config["font_settings"]["character_width"]
-    cfg_char_height = config["font_settings"]["character_height"]
-    cfg_is_padding = config["font_settings"]["size_as_padding"]
-    cfg_is_square = config["font_settings"]["force_square"]
+    cfg_font_path  = Path(config["font_settings"]["font_path"])
+    cfg_ascii_w         = config["font_settings"]["ASCII_whitelist"]
+    cfg_ascii_b         = config["font_settings"]["ASCII_blacklist"]
+    cfg_txt_whitespace  = config["font_settings"]["text_out_whitespace"]
+    cfg_font_size       = config["font_settings"]["font_size"]
+    cfg_auto_size       = config["font_settings"]["auto_size"]
+    cfg_char_width      = config["font_settings"]["character_width"]
+    cfg_char_height     = config["font_settings"]["character_height"]
+    cfg_is_padding      = config["font_settings"]["size_as_padding"]
+    cfg_is_square       = config["font_settings"]["force_square"]
 
-    cfg_raw_metric = config["method"]["metric"]
-    cfg_white_thresh = config["method"]["white_threshold"]
-    cfg_normalize_lum = config["method"]["normalize_luminosity"]
-    cfg_dct_cut_low = config["method"]["DCT_cutoff_low"]
-    cfg_dct_cut_high = config["method"]["DCT_cutoff_high"]
-    cfg_mix_threshold = config["method"]["Mix_threshold"]
+    cfg_raw_metric      = config["method"]["metric"]
+    cfg_white_thresh    = config["method"]["white_threshold"]
+    cfg_normalize_lum   = config["method"]["normalize_luminosity"]
+    cfg_dct_cut_low     = config["method"]["DCT_cutoff_low"]
+    cfg_dct_cut_high    = config["method"]["DCT_cutoff_high"]
+    cfg_mix_threshold   = config["method"]["Mix_threshold"]
 
     # Handle settings
     set_log_level(cfg_log_level)
@@ -361,10 +377,17 @@ if __name__ == "__main__":
     --------------------ASCII art--------------------
     """
     ascii_art = []
+    ascii_text = []
 
     for index, image in enumerate(originals):
         logger.info(f"Image {index + 1} / {len(originals)} : {filenames[index]}")
-        ascii_art.append(make_ascii_art(image))
+        if cfg_txt_output:
+            _ascii_image, _ascii_text = make_ascii_art(image)
+            ascii_art.append(_ascii_image)
+            ascii_text.append(_ascii_text)
+        else:
+            ascii_art.append(make_ascii_art(image))
+
         # May remain undefined, though unlikely.
         file_path = None
         # Check if consent is needed
@@ -376,8 +399,13 @@ if __name__ == "__main__":
         if not get_consent or input("Save image? [y/n]").upper() == "Y":
             # Attempt to save image
             try:
-                file_path = str(cwd) + "\\image_out\\" + filenames[index]
-                ascii_art[index].save(file_path, "png")
+                if cfg_txt_output:
+                    file_path = str(cwd) + "\\image_out\\" + str(Path(filenames[index]).with_suffix(".txt"))
+                    with open(file_path, "w+", encoding="UTF-8") as text_out:
+                        text_out.write(ascii_text[index])
+                else:
+                    file_path = str(cwd) + "\\image_out\\" + filenames[index]
+                    ascii_art[index].save(file_path, "png")
                 print(f"Saved image in {file_path}")
             except OSError:
                 logger.error(f"Could not save image in {file_path}!")

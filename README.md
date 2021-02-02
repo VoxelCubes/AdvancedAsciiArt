@@ -66,7 +66,7 @@ Simply supply a path to a .ttf file. _Note: you may need to exclude a number of 
 |![original](image_out/cc0_house_tweaked_glyph.jpg)|
 
 ### Highly configurable
-There are many different settings you can tweak to get the output just right. Sometimes changing a few settings 
+There are many settings you can tweak to get the output just right. Sometimes changing a few settings 
 is necessary to get good results.
 
 ## How to run it
@@ -97,9 +97,13 @@ Default values of config.json:
 {
     "general": {
         "image_path": "cc0_house_tweaked.jpg",
+        "output_as_txt": false,
         "prompt_confirmation": "first",
         "pad_to_original_size": true,
         "pad_centered": true,
+        "remove_trailing_whitespace": true,
+        "scale_input_width": 1.0,
+        "scale_input_height": 1.0,
         "logging": "info",
         "progress_interval": 25,
         "allowed_file_types": [
@@ -115,6 +119,7 @@ Default values of config.json:
         "font_path": "courbd.ttf",
         "ASCII_whitelist": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~",
         "ASCII_blacklist": "",
+        "text_out_whitespace": " ",
         "font_size": 20,
         "auto_size": true,
         "character_width": 2,
@@ -136,7 +141,8 @@ Default values of config.json:
 * **image_path** 
   For a given file or directory name it will test for its existence in `\AdvancedAsciiArt\image_in\`.
   If an absolute path is given, the script will load from there instead. 
-  _Note: the output directory will always be `\AdvancedAsciiArt\image_out\`._ 
+  _Note: the output directory will always be `\AdvancedAsciiArt\image_out\`._
+* **output_as_txt** When `true`, the raw text will be output to a txt file, otherwise a _.png_ image.
 * **prompt_confirmation** Can be set to: `each`, `first`, or `none`.
   Determines whether to ask if you would like to save the current image and, 
   potentially, continue to the next.
@@ -144,6 +150,12 @@ Default values of config.json:
   If set to `true`, the output image will be resized to match the original.
 * **pad_centered** When `false`, padding is added only to the right and bottom, 
   otherwise it is padded equally on all sides.
+* **remove_trailing_whitespace** _Affects text file output._ When `true`, trailing whitespace characters
+  are stripped from the right.
+* **scale_input_width** _Intended for text output._ Scale the image to adapt to additional character spacing.
+  _Note: set to 1 if intending to output as an image. [More on calibration](#Text Output Calibration)_
+* **scale_input_height** _Intended for text output._ Scale the image to adapt to additional line spacing.
+  _Note: set to 1 if intending to output as an image. [More on calibration](#Text Output Calibration)_
 * **logging** Set the desired log level: `debug`, `info`, `warning`, `error`. 
   Lower levels will be suppressed in the console. No log file is created either way.
 * **progress_interval** While processing, progress reports are given every *x* percent at `info` priority.
@@ -157,6 +169,8 @@ Default values of config.json:
   then `C:\Windows\Fonts\`. If an absolute path is given, the script will load from there instead.
 * **ASCII_whitelist** List of characters the script will use.
 * **ASCII_blacklist** Optional list of characters to exclude from the whitelist at runtime.
+* **text_out_whitespace** _Affects text file output._ Set the character to use when the `white_threshold` is reached.
+  By default, this will be a simple space.
 * **font_size** The size all characters will be drawn at.
 * **auto_size** When `true`, the minimal size to fit all characters is used,
   and the following width and height are ignored. 
@@ -179,5 +193,11 @@ Default values of config.json:
 * **Mix_threshold** _Affects the mix metric._ Can be a percentage when in the range of ]0, 1[ or 
   an absolute value for values >= 1. This determines how many of the best candidates of the lum metric to present to the dct metric.
 
+## Text Output Calibration
+When pasting art as text into another program, the character and line spacing may change. To correct distortions,
+it is best tweak the scale factors. In order to find the optimal values, you can use the _testbox.png_ image
+to find what values preserve its square shape.  
+For Discord, I've found that a width of 1.1 and a height of 0.6 are pretty good.
+
 ## TODO:
-- [ ] Allow for plain text output (Only works with monospace fonts)
+- [x] Allow for plain text output (Only works with monospace fonts)
