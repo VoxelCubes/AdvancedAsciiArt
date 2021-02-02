@@ -7,5 +7,6 @@ __pycache__/
 *.png
 *.ttf
 *.json
+*.txt
 
 test.py
