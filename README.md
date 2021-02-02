@@ -153,9 +153,9 @@ Default values of config.json:
 * **remove_trailing_whitespace** _Affects text file output._ When `true`, trailing whitespace characters
   are stripped from the right.
 * **scale_input_width** _Intended for text output._ Scale the image to adapt to additional character spacing.
-  _Note: set to 1 if intending to output as an image. [More on calibration](#Text Output Calibration)_
+  _Note: set to 1 if intending to output as an image. [More on calibration](#Text-Output-Calibration)_
 * **scale_input_height** _Intended for text output._ Scale the image to adapt to additional line spacing.
-  _Note: set to 1 if intending to output as an image. [More on calibration](#Text Output Calibration)_
+  _Note: set to 1 if intending to output as an image. [More on calibration](#Text-Output-Calibration)_
 * **logging** Set the desired log level: `debug`, `info`, `warning`, `error`. 
   Lower levels will be suppressed in the console. No log file is created either way.
 * **progress_interval** While processing, progress reports are given every *x* percent at `info` priority.
