@@ -6,13 +6,13 @@ Helper file for static functions that don't rely on global variables.
 19.01.2021
 """
 
-
 from enum import Enum, auto
 from math import floor
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageChops
+from PIL import Image, ImageChops, ImageDraw
 from scipy import fftpack
+
 
 
 class Metric(Enum):
@@ -21,49 +21,52 @@ class Metric(Enum):
     MIX = auto()
 
 
+
 class Confirmation(Enum):
     FIRST = auto()
     EACH = auto()
     NONE = auto()
 
 
+
 def default_config():
     return {
-        "general": {
-            "image_path": "cc0_house_tweaked.jpg",  # check in image_in, then absolute path
-            "output_as_txt": False,
-            "prompt_confirmation": "first",  # first, each, none
-            "pad_to_original_size": True,
-            "pad_centered": True,
+        "general"      : {
+            "image_path"                : "cc0_house_tweaked.jpg",  # check in image_in, then absolute path
+            "output_as_txt"             : False,
+            "prompt_confirmation"       : "first",  # first, each, none
+            "pad_to_original_size"      : True,
+            "pad_centered"              : True,
             "remove_trailing_whitespace": True,
-            "scale_input_width": 1.0,
-            "scale_input_height": 1.0,
-            "logging": "info",
-            "progress_interval": 25,
-            "allowed_file_types": [".bmp", ".png", ".jpg", ".jpeg", ".tiff"],
-            "ignore_invalid_types": True,
+            "scale_input_width"         : 1.0,
+            "scale_input_height"        : 1.0,
+            "logging"                   : "info",
+            "progress_interval"         : 25,
+            "allowed_file_types"        : [".bmp", ".png", ".jpg", ".jpeg", ".tiff"],
+            "ignore_invalid_types"      : True,
         },
         "font_settings": {
-            "font_path": "courbd.ttf",  # check \fonts\ then windows\fonts\ then absolute path
-            "ASCII_whitelist": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~",
-            "ASCII_blacklist": "",
+            "font_path"          : "courbd.ttf",  # check \fonts\ then windows\fonts\ then absolute path
+            "ASCII_whitelist"    : "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;?@[\\]^_`{|}~",
+            "ASCII_blacklist"    : "",
             "text_out_whitespace": " ",
-            "font_size": 20,
-            "auto_size": True,
-            "character_width": 2,
-            "character_height": 2,
-            "size_as_padding": False,
-            "force_square": False,
+            "font_size"          : 20,
+            "auto_size"          : True,
+            "character_width"    : 2,
+            "character_height"   : 2,
+            "size_as_padding"    : False,
+            "force_square"       : False,
         },
-        "method": {
-            "metric": "mix",
-            "white_threshold": 250,
+        "method"       : {
+            "metric"              : "mix",
+            "white_threshold"     : 250,
             "normalize_luminosity": True,
-            "DCT_cutoff_low": 3,
-            "DCT_cutoff_high": 2,
-            "Mix_threshold": 0.50,
+            "DCT_cutoff_low"      : 3,
+            "DCT_cutoff_high"     : 2,
+            "Mix_threshold"       : 0.50,
         },
     }
+
 
 
 def test_file_extension(file_name, valid_extensions):
@@ -74,6 +77,7 @@ def test_file_extension(file_name, valid_extensions):
     :return True if valid extension
     """
     return file_name.suffix in valid_extensions
+
 
 
 def dct2(image, cutoff_low, cutoff_high):
@@ -95,6 +99,7 @@ def dct2(image, cutoff_low, cutoff_high):
     return dct_minimized
 
 
+
 def to_greyscale(image):
     """
     Converts RGB into a single luminance channel.
@@ -102,6 +107,7 @@ def to_greyscale(image):
     :return: pil image
     """
     return image.convert("L")
+
 
 
 def luminosity_avg(image):
@@ -114,6 +120,7 @@ def luminosity_avg(image):
     return pixels.mean(dtype=np.float)
 
 
+
 def crop_background(image):
     """
     Crops away everything that is of solid background color (white). Crops to bounding box.
@@ -124,6 +131,7 @@ def crop_background(image):
     diff = ImageChops.difference(image, bg)
     bbox = diff.getbbox()
     return image.crop(bbox)
+
 
 
 def pad_image_to_size(image, size, centered):
@@ -142,6 +150,7 @@ def pad_image_to_size(image, size, centered):
     return bg
 
 
+
 def char_cutout(font, character, max_size):
     """
     Draws a character and crops to bounding box
@@ -154,6 +163,7 @@ def char_cutout(font, character, max_size):
     img_draw = ImageDraw.Draw(canvas)
     img_draw.text((0, 0), character, fill="black", font=font)
     return crop_background(canvas)
+
 
 
 def font_thumbnails(font, characters, max_size, width=None, height=None,
@@ -213,6 +223,7 @@ def font_thumbnails(font, characters, max_size, width=None, height=None,
     return final_thumbs
 
 
+
 def assemble_from_chunks(chunks, chunk_map, logger):
     """
     Assembles ascii tiles according to the 2d map holding the corresponding indices for chunks
@@ -233,6 +244,7 @@ def assemble_from_chunks(chunks, chunk_map, logger):
                 canvas.paste(chunk, (chunk_width * cx, chunk_height * cy))
 
     return canvas
+
 
 
 def assemble_from_chunks_txt(chunk_map, ascii_string, whitespace, remove_whitespace, logger):
